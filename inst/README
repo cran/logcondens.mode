@@ -1,0 +1,6 @@
+
+The package logcondens.mode is based on code from the logcondens package.  
+
+The J00, J10, J11, J20, Local_LL_all, activeSetLogCon, intECDF, intF, and
+logConDens functions are essentially identical, with a few added arguments
+that can be ignored, and more values returned. 

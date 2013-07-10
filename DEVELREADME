@@ -1,0 +1,18 @@
+this should not be distributed with the package, development notes.
+
+
+to-do list:
+
+(1)I misunderstood the making-packages documentation related to math in .Rd
+files.  See the manual for the original logcondens package.  All the math
+works there, so no \eqn{} is needed apparently.  My documentation should just
+be modified to be like the original.
+
+(2)Need to grab the source documentation from the website for the functions of
+logcondens that I modify and add my modifications.
+
+(3) !!! Error in the CI-forming code when original data has weights.  
+ (i) the LRmodeTest is under development as LRmodeTest.weights, same for
+ LCLRCImode.  There is one call in LCLRCImode.weights to LRmodeTest.weights, which needs to be changed to a call to LRmodeTest, once the names are changed.
+ (ii) in LRmodeTest.weights, we refer to LCTLLRdistn using ":::".  need to remove that, once 
+   the function is part of the pcakage and has access to the namespace again.
