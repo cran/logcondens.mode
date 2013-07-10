@@ -158,7 +158,7 @@ LocalMLE.mode <- function (z, w, IsKnot, IsMIC, a, phi_o, prec, print=FALSE)
 
         cond1 <- r1$constr[1]!=r1$constr[2] && r1$constr[1]==m-1 && i==m-1 
         cond2 <- r1$constr[1]!=r1$constr[2] && r1$constr[1]==i  && JJ[i+1]>JJ[i]+1 && JJ[i+2]>JJ[i+1]
-        ##########JUST rev the indices ! ! !         
+##########JUST rev the indices ! ! !         
         if (cond1){ ##case m==2
           LK <- JJ[i+1]
           RK <- JJ[i+1] ##both ==m
@@ -201,7 +201,7 @@ LocalMLE.mode <- function (z, w, IsKnot, IsMIC, a, phi_o, prec, print=FALSE)
           ind.lin <- 1:lentmp  ## WE REVERSED EVERYTHING.
           HR0 <- rev(ztmp*sum(wtmp[ind.lin] * (1-ztmp[ind.lin]/dtmp)))
           JR0 <- rev(ztmp*sum((J01s[ind.lin]+J10s[ind.lin])*(1-ztmp[ind.lin]/dtmp)))
-          #### want to skip the next loop; this doesn't work though; 'for' will ignore it.
+#### want to skip the next loop; this doesn't work though; 'for' will ignore it.
           ##i <- i+1
         }
         else{
@@ -230,7 +230,7 @@ LocalMLE.mode <- function (z, w, IsKnot, IsMIC, a, phi_o, prec, print=FALSE)
     }
     ## ## HACK HACK HACK
     DL <- H.m.byhand <- NULL ## used only when mode is right next to another vector
-    ### Del print statements
+### Del print statements
     ##print("p, p2")
     ##print(p) ## THOUGHT p could not be 1 but it CAN  ? 
     ##print(p2) 
@@ -349,96 +349,94 @@ getBasisVecs <- function(z){
 ### constr is 2 (consecutive) idcs in y
 MLE.mode <- function (y,constr, w = NA, phi_o = NA, prec = 10^(-7), print = FALSE) 
 {
-    n <- length(y)
-    if (sum(y[2:n] <= y[1:n - 1]) > 0) {
-        cat("We need strictly increasing numbers y(i)!\n")
-        stop("Exiting because of bad ys")
+  n <- length(y)
+  if (sum(y[2:n] <= y[1:n - 1]) > 0) {
+    cat("We need strictly increasing numbers y(i)!\n")
+    stop("Exiting because of bad ys")
+  }
+  if (max(is.na(w)) == 1) {
+    w <- rep(1/n, n)
+  }
+  if (sum(w < 0) > 0) {
+    cat("We need nonnegative weights w(i) !\n")
+    stop("exiting because of bad ws")
+  }
+  ww <- w/sum(w)
+  if (max(is.na(phi_o)) == 1) {
+    m <- sum(ww * y)
+    s2 <- sum(ww * (y - m)^2)
+    phi <- LocalNormalize(y, -(y - m)^2/(2 * s2))
+  }
+  else {
+    phi <- LocalNormalize(y, phi_o)
+  }
+  iter0 <- 0
+  r1 <- LocalLLall.mode(y, ww, phi,constr)##comes up w new candidate (& corresponding dirderiv); ##returns 'knots' format
+  L <- r1$ll
+  phi_new <- r1$phi.new
+  dirderiv <- r1$dirderiv
+  ##while ((dirderiv >= prec) & (iter0 < 100)) {
+  while ((dirderiv >= prec) && (iter0 < 100)) {## the "&&" is untested change from "&"
+    iter0 <- iter0 + 1
+    L_new <- Local_LL(y, ww, phi_new)##old version is fine here
+    iter1 <- 0
+    ##while ((L_new < L) & (iter1 < 20)) {
+    if (print == TRUE) {
+      print(paste("mle.mode:outer1: iter0=", iter0, " / iter1=", iter1, 
+                  " / L_new=", round(L_new, 4),
+                  " / L=", round(L,4),
+                  " / L_new < L=", L_new<L,
+                  sep = ""))
+      ##           if (any(is.na(c(L_new,L))) || is.null(L_new) || is.null(L)){
+      ##           }
     }
-    if (max(is.na(w)) == 1) {
-        w <- rep(1/n, n)
+    while ((L_new < L) && (iter1 < 20)) { ## the "&&" is untested change from "&"
+      ## NR moves in direction deriv is positive.
+      ##Then we find the t such that the likelihood increases.
+      ## 2^-20  approx 1e-
+      iter1 <- iter1 + 1
+      phi_new <- 0.5 * (phi + phi_new)
+      L_new <- Local_LL(y, ww, phi_new)##old version is fine here
+      dirderiv <- 0.5 * dirderiv
+      if (print == TRUE) {
+        print(paste("mle.mode:inner1: iter0=", iter0, " / iter1=", iter1, 
+                    " / L_new=", round(L_new, 4), " / dirderiv=", round(dirderiv, 
+                                                                        4), sep = ""))
+      }
     }
-    if (sum(w < 0) > 0) {
-      cat("We need nonnegative weights w(i) !\n")
-      stop("exiting because of bad ws")
-    }
-    ww <- w/sum(w)
-    if (max(is.na(phi_o)) == 1) {
-        m <- sum(ww * y)
-        s2 <- sum(ww * (y - m)^2)
-        phi <- LocalNormalize(y, -(y - m)^2/(2 * s2))
+##### don't understand this part.
+#####  is this trying to provide a lower bound on the amount
+##### of increase that we get in the LL (in terms of the dirderiv)?
+#####  or ensuring that ActiveSet is increasing???
+    if (L_new >= L) {
+      tstar <- max((L_new - L)/dirderiv) ##max??
+      if (tstar >= 0.5) {
+        phi <- LocalNormalize(y, phi_new)
+      }
+      else {
+        tstar <- max(0.5/(1 - tstar)) ##max??
+        phi <- LocalNormalize(y, (1 - tstar) * phi + 
+                              tstar * phi_new)
+      }
+      r1 <- LocalLLall.mode(y, ww, phi,constr)
+      L <- r1$ll
+      phi_new <- r1$phi.new
+      dirderiv <- r1$dirderiv
     }
     else {
-        phi <- LocalNormalize(y, phi_o)
+      dirderiv <- 0
     }
-    iter0 <- 0
-    r1 <- LocalLLall.mode(y, ww, phi,constr)##comes up w new candidate (& corresponding dirderiv); ##returns 'knots' format
-    L <- r1$ll
-    phi_new <- r1$phi.new
-    dirderiv <- r1$dirderiv
-    ##while ((dirderiv >= prec) & (iter0 < 100)) {
-    while ((dirderiv >= prec) && (iter0 < 100)) {## the "&&" is untested change from "&"
-        iter0 <- iter0 + 1
-        L_new <- Local_LL(y, ww, phi_new)##old version is fine here
-        iter1 <- 0
-        ##while ((L_new < L) & (iter1 < 20)) {
-        if (print == TRUE) {
-          print(paste("mle.mode:outer1: iter0=", iter0, " / iter1=", iter1, 
-                      " / L_new=", round(L_new, 4),
-                      " / L=", round(L,4),
-                      " / L_new < L=", L_new<L,
-                      sep = ""))
-##           if (any(is.na(c(L_new,L))) || is.null(L_new) || is.null(L)){
-##           }
-        }
-        ## HERE HERE
-        ##if (print && iter0==16) browser();
-        while ((L_new < L) && (iter1 < 20)) { ## the "&&" is untested change from "&"
-          ## NR moves in direction deriv is positive.
-          ##Then we find the t such that the likelihood increases.
-          ## 2^-20  approx 1e-
-            iter1 <- iter1 + 1
-            phi_new <- 0.5 * (phi + phi_new)
-            L_new <- Local_LL(y, ww, phi_new)##old version is fine here
-            dirderiv <- 0.5 * dirderiv
-            if (print == TRUE) {
-                print(paste("mle.mode:inner1: iter0=", iter0, " / iter1=", iter1, 
-                  " / L_new=", round(L_new, 4), " / dirderiv=", round(dirderiv, 
-                    4), sep = ""))
-            }
-        }
-        ##### don't understand this part.
-        #####  is this trying to provide a lower bound on the amount
-        ##### of increase that we get in the LL (in terms of the dirderiv)?
-        #####  or ensuring that ActiveSet is increasing???
-        if (L_new >= L) {
-            tstar <- max((L_new - L)/dirderiv) ##max??
-            if (tstar >= 0.5) {
-                phi <- LocalNormalize(y, phi_new)
-            }
-            else {
-                tstar <- max(0.5/(1 - tstar)) ##max??
-                phi <- LocalNormalize(y, (1 - tstar) * phi + 
-                  tstar * phi_new)
-            }
-            r1 <- LocalLLall.mode(y, ww, phi,constr)
-            L <- r1$ll
-            phi_new <- r1$phi.new
-            dirderiv <- r1$dirderiv
-        }
-        else {
-            dirderiv <- 0
-        }
-        if (print == TRUE) { ##print==true and print is a function...?
-            print(paste("mle.mode:outer2: iter0=", iter0, " / iter1=",
-                        iter1, 
-                        ##" / L=", round(L, 4),
-                        " / L=", round(L, 4),
-                        " / dirderiv=", round(dirderiv, 4), sep = ""))
-        }
+    if (print == TRUE) { ##print==true and print is a function...?
+      print(paste("mle.mode:outer2: iter0=", iter0, " / iter1=",
+                  iter1, 
+                  ##" / L=", round(L, 4),
+                  " / L=", round(L, 4),
+                  " / dirderiv=", round(dirderiv, 4), sep = ""))
     }
-    r1 <- list(phi = matrix(phi, ncol = 1), L = L,
-               Fhat = matrix(LocalF(y,  phi), ncol = 1))
-    return(r1)
+  }
+  r1 <- list(phi = matrix(phi, ncol = 1), L = L,
+             Fhat = matrix(LocalF(y,  phi), ncol = 1))
+  return(r1)
 }
 
 
@@ -447,7 +445,7 @@ MLE.mode <- function (y,constr, w = NA, phi_o = NA, prec = 10^(-7), print = FALS
 
 
 
-#requires a not be NA
+                                        #requires a not be NA
 #######AGGH i think 'm' is called 'p' now
 getm <- function(x,phi,a){
   print("getm: careful using this function: m is called p now i believe.")
@@ -466,7 +464,7 @@ insert <- function(val,vec,idx){
     return(c(val,vec))
   else if (idx>=n+1)
     return(c(vec,val)) 
- else
+  else
     return(c(vec[1:(idx-1)],val,vec[idx:n]));
 }
 delete <- function(vec,idcs){ #works with NULL=idcs
@@ -560,15 +558,15 @@ syncIsKnot <- function(IsKnot,IsMIC,k){
 
 ###### Reinforces constancy of phi across constraint; REDUNDANT.
 getGrad <- function(y,w,phi, constr=0){
-  ### gradient NEEDs the full knot vector and the constraint.
-  ### "y" is all knots.  this includes a and all modes regardless of constraints
-  ### i.e. any data point that has a bend in the actual phi.
-  ### Then "constr" is the binding constraint, integral w/ length 2
-  ###  the indices that are constrained in y. One of these always pertains
-  ### to the index of a in the knots.  at least one more pertains to which
-  ### side is constrained.  3 if both are.
-  ### at the end, basically: length(grad) == length(y) - (length(constr)-1)
-  ### taking len(constr)=1 if there is no constraint.
+### gradient NEEDs the full knot vector and the constraint.
+### "y" is all knots.  this includes a and all modes regardless of constraints
+### i.e. any data point that has a bend in the actual phi.
+### Then "constr" is the binding constraint, integral w/ length 2
+###  the indices that are constrained in y. One of these always pertains
+### to the index of a in the knots.  at least one more pertains to which
+### side is constrained.  3 if both are.
+### at the end, basically: length(grad) == length(y) - (length(constr)-1)
+### taking len(constr)=1 if there is no constraint.
   ll <- length(y); ##"ell", "L" but too hard to distinguish "ell" from "one"
   o <- length(constr)
   if (o<=1 || constr[1]<1 || constr[o] > ll || constr[1]==constr[2]){ ##no mono constraint.
@@ -576,7 +574,7 @@ getGrad <- function(y,w,phi, constr=0){
     grad <- t(getGrad.uncstr(x=y,w=w,phi=phi)); ##length == ll
   }
   else if (o==2 && constr[1]==constr[2]-1){
-    ### the 'om1' is holdover code from when o could be 3 or 2
+### the 'om1' is holdover code from when o could be 3 or 2
     om1 <- o-1
     grad <- matrix(0,ncol=1,nrow=ll-om1);
     m <- min(constr); ##ie constr[1]
@@ -594,9 +592,9 @@ getGrad <- function(y,w,phi, constr=0){
     if (m<ll-1) {projmat <- rbind(projmat[1:m,],xtraRow,projmat[(m+1):(ll-1),])}
     else {projmat <- rbind(projmat[1:m,],xtraRow)}
     grad.tmp <- getGrad.uncstr(y,w,phi);
-##     grad[m] <- sum(grad.tmp[m:(m+om1)]);
-##     grad[1:(m-1)] <- grad.tmp[1:(m-1)];
-##     grad[(m+1):(ll-om1)] <- grad.tmp[(m+o):ll]
+    ##     grad[m] <- sum(grad.tmp[m:(m+om1)]);
+    ##     grad[1:(m-1)] <- grad.tmp[1:(m-1)];
+    ##     grad[(m+1):(ll-om1)] <- grad.tmp[(m+o):ll]
     grad <- t(grad.tmp) %*% projmat
   }
   else {
@@ -616,17 +614,17 @@ reducePhi <- function(phi,constr){
   }
   else if (o==2 && constr[1]==constr[2]-1){
     m <- min(constr); ##ie constr[1]
-##     ##om1 is holdover from when o could be 3 or 2.
-##     om1 <- o-1
-##     m <- min(constr); ##ie constr[1]
-##     if (m==1){ ##could do this w/ similar matrix as one below...
-##       endseq <- seq(from=m+o, by=1, length=ll-m-o+1)
-##       phi <- c(phi[m], phi[endseq])
-##     }
-##     else if (m==ll-1)
-##       phi <- c(phi[1:(m-1)], phi[m])
-##     else     ## m != ll ever when o==2.
-##       phi <- c(phi[1:(m-1)], phi[m], phi[(m+o):ll])
+    ##     ##om1 is holdover from when o could be 3 or 2.
+    ##     om1 <- o-1
+    ##     m <- min(constr); ##ie constr[1]
+    ##     if (m==1){ ##could do this w/ similar matrix as one below...
+    ##       endseq <- seq(from=m+o, by=1, length=ll-m-o+1)
+    ##       phi <- c(phi[m], phi[endseq])
+    ##     }
+    ##     else if (m==ll-1)
+    ##       phi <- c(phi[1:(m-1)], phi[m])
+    ##     else     ## m != ll ever when o==2.
+    ##       phi <- c(phi[1:(m-1)], phi[m], phi[(m+o):ll])
     phi <- delete(phi,m+1) ##m+1=constr[2], should be allowable index for phi.
   }
   else {
@@ -681,8 +679,8 @@ getHess <- function(y,w,phi,constr=0){
     om1 <- o-1
     hess <- matrix(0,ncol=ll-om1,nrow=ll-om1);
     m <- min(constr);
-    #######
-    ####### REDUNDANT: reinforcing constancy of phi on constraint.
+#######
+####### REDUNDANT: reinforcing constancy of phi on constraint.
     if (m==1) {##could do this w/ similar matrix as one below...
       endseq <- seq(from=m+o, by=1, length=ll-m-o+1)
       phi <- c(rep(phi[m],o), phi[endseq]);
@@ -693,7 +691,7 @@ getHess <- function(y,w,phi,constr=0){
       {phi <- c(phi[1:(m-1)], rep(phi[m],o), phi[(m+o):ll]);} 
     ##else if (m==ll){ ##cant happne
     ##}
-    ######
+######
     xtraRow <- rep(0,ll-1); xtraRow[m] <- 1;
     projmat <- diag(rep(1,ll-1)) ##this works even if m==1
     if (m<ll-1) {projmat <- rbind(projmat[1:m,],xtraRow,projmat[(m+1):(ll-1),])}
